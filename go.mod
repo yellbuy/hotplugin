@@ -1,8 +1,8 @@
-module github.com/letiantech/hotplugin
+module github.com/yellbuy/hotplugin
 
 go 1.12
 
 require (
 	github.com/fsnotify/fsnotify v1.4.7
-	golang.org/x/sys v0.0.0-20190310054646-10058d7d4faa // indirect
+	golang.org/x/sys v1.14 // indirect
 )

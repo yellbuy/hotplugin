@@ -33,6 +33,7 @@ import (
 const PLUGIN_TIMEOUT = 100 * time.Millisecond
 
 type PluginStatus int32
+type PluginLicenceStatus int32
 
 const (
 	PluginStatusNone PluginStatus = iota
@@ -41,6 +42,14 @@ const (
 	PluginStatusReloading
 	PluginStatusUnloading
 	PluginStatusUnloaded
+)
+
+const (
+	pluginLicenceStatusFree PluginLicenceStatus = iota
+	pluginLicenceStatusTrial
+	pluginLicenceStatusInvalid
+	pluginLicenceStatusExpire
+	pluginLicenceStatusValid
 )
 
 type PluginError struct {
@@ -58,14 +67,22 @@ type pluginFuncInfo struct {
 }
 
 type Plugin struct {
-	m       Manager
-	name    string
-	version uint64
-	path    string
-	plugin  *plugin.Plugin
-	status  PluginStatus
-	refs    int
-	cache   map[string]*pluginFuncInfo
+	m           Manager
+	id          string
+	name        string
+	versionCode uint64
+	versionName string
+
+	upgradePath   string
+	verifyPath    string
+	helpPath      string
+	desc          string
+	path          string
+	licenceStatus PluginLicenceStatus
+	plugin        *plugin.Plugin
+	status        PluginStatus
+	refs          int
+	cache         map[string]*pluginFuncInfo
 }
 
 func NewPlugin(path string, m Manager) *Plugin {
@@ -83,16 +100,25 @@ func (p *Plugin) Status() PluginStatus {
 	return PluginStatus(atomic.LoadInt32((*int32)(&(p.status))))
 }
 
+func (p *Plugin) LicenceStatus() PluginLicenceStatus {
+	return PluginLicenceStatus(atomic.LoadInt32((*int32)(&(p.licenceStatus))))
+}
+
 func (p *Plugin) setStatus(status PluginStatus) {
 	atomic.StoreInt32((*int32)(&(p.status)), int32(status))
 }
-
+func (p *Plugin) Id() string {
+	return p.id
+}
 func (p *Plugin) Name() string {
 	return p.name
 }
+func (p *Plugin) VersionName() string {
+	return p.versionName
+}
 
-func (p *Plugin) Version() uint64 {
-	return p.version
+func (p *Plugin) VersionCode() uint64 {
+	return p.versionCode
 }
 
 func (p *Plugin) Path() string {
@@ -118,11 +144,13 @@ func (p *Plugin) Load() error {
 		p.setStatus(PluginStatusNone)
 		return e
 	}
-	register := func(name string, version uint64) error {
+	register := func(id string, name string, versionCode uint64, versionName string) error {
+		p.id = id
 		p.name = name
-		p.version = version
-		s := fmt.Sprintf("load plugin: %s, version: 0x%x", p.name, p.version)
-		p1, e1 := p.m.GetPluginWithVersion(name, version)
+		p.versionCode = versionCode
+		p.versionName = versionName
+		s := fmt.Sprintf("load plugin: %s, versionCode: 0x%x, versionName: %s", p.name, p.versionCode, versionName)
+		p1, e1 := p.m.GetPluginWithVersion(id, versionCode)
 		if p1 != nil {
 			e1 = errors.New("can't double load plugin")
 			log.Println(s, ", error: ", e1.Error())
@@ -135,15 +163,13 @@ func (p *Plugin) Load() error {
 			return nil
 		}
 	}
-	e = f.(func(func(string, uint64) error) error)(register)
+	e = f.(func(func(string, string, uint64, string) error) error)(register)
 
 	return e
 }
 
 func (p *Plugin) Reload() error {
-	name := p.name
-	version := p.version
-	s := fmt.Sprintf("reload plugin: %s, version: 0x%x", name, version)
+	s := fmt.Sprintf("reload plugin: %s, version: 0x%x, versionName: %s", p.name, p.versionCode, p.versionName)
 	log.Print(s)
 	p.setStatus(PluginStatusLoaded)
 	return nil
@@ -155,9 +181,7 @@ func (p *Plugin) Unload() error {
 		p.Status() == PluginStatusNone {
 		return nil
 	}
-	name := p.name
-	version := p.version
-	s := fmt.Sprintf("unload plugin: %s, version: 0x%x", name, version)
+	s := fmt.Sprintf("unload plugin: %s, version: 0x%x", p.name, p.versionCode, p.versionName)
 	f, e := p.plugin.Lookup("Unload")
 	if e != nil {
 		log.Print(s, ", error: ", e)

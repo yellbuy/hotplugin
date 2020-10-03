@@ -38,8 +38,8 @@ type ManagerOptions struct {
 type Manager interface {
 	Run() error
 	IsRunning() bool
-	GetPlugin(name string) (*Plugin, error)
-	GetPluginWithVersion(name string, version uint64) (*Plugin, error)
+	GetPlugin(id string) (*Plugin, error)
+	GetPluginWithVersion(id string, versionCode uint64) (*Plugin, error)
 	GetFunc(module, function string) (f func(...interface{}) []interface{}, err error)
 	Call(module, function string, args ...interface{}) []interface{}
 	OnLoaded(p *Plugin)
@@ -93,27 +93,27 @@ func (m *manager) OnError(p *Plugin, err *PluginError) {
 }
 
 func (m *manager) OnUnloaded(p1 *Plugin) {
-	name := p1.Name()
-	version := p1.Version()
-	log.Print(name, " loaded")
-	if mp, ok := m.loaded[name]; ok {
-		delete(mp, version)
+	id := p1.Id()
+	versionCode := p1.VersionCode()
+	log.Print(id, " loaded")
+	if mp, ok := m.loaded[id]; ok {
+		delete(mp, versionCode)
 		if len(mp) == 0 {
-			delete(m.loaded, name)
+			delete(m.loaded, id)
 		}
 	}
 }
 
 func (m *manager) OnLoaded(p1 *Plugin) {
-	name := p1.Name()
-	version := p1.Version()
-	log.Print(name, " loaded")
-	if mp, ok := m.loaded[name]; ok {
-		mp[version] = p1
+	id := p1.Id()
+	versionCode := p1.VersionCode()
+	log.Print(id, " loaded")
+	if mp, ok := m.loaded[id]; ok {
+		mp[versionCode] = p1
 	} else {
 		mp := make(map[uint64]*Plugin)
-		mp[version] = p1
-		m.loaded[name] = mp
+		mp[versionCode] = p1
+		m.loaded[id] = mp
 	}
 }
 
@@ -135,7 +135,7 @@ func (m *manager) loadAll() error {
 			return e
 		}
 		for i := 0; i < len(d); i++ {
-			path := m.pluginPath(d[i].Name())
+			path := m.pluginPath(d[i].Id())
 			if !m.isPlugin(path) {
 				continue
 			}
@@ -173,7 +173,7 @@ func (m *manager) Run() error {
 		for {
 			select {
 			case e := <-m.watcher.Events:
-				path := m.pluginPath(e.Name)
+				path := m.pluginPath(e.Id)
 				log.Print(e)
 				if !m.isPlugin(path) {
 					continue
@@ -207,8 +207,8 @@ func (m *manager) Run() error {
 	return nil
 }
 
-func (m *manager) GetPlugin(name string) (*Plugin, error) {
-	mp, ok := m.loaded[name]
+func (m *manager) GetPlugin(id string) (*Plugin, error) {
+	mp, ok := m.loaded[id]
 	if !ok {
 		return nil, errors.New("not found")
 	}
@@ -223,12 +223,12 @@ func (m *manager) GetPlugin(name string) (*Plugin, error) {
 	return latestPlugin, nil
 }
 
-func (m *manager) GetPluginWithVersion(name string, version uint64) (*Plugin, error) {
-	mp, ok := m.loaded[name]
+func (m *manager) GetPluginWithVersion(id string, versionCode uint64) (*Plugin, error) {
+	mp, ok := m.loaded[id]
 	if !ok {
 		return nil, errors.New("not found")
 	}
-	p, ok := mp[version]
+	p, ok := mp[versionCode]
 	if !ok {
 		return nil, errors.New("not found")
 	}

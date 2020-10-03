@@ -47,8 +47,8 @@ func GetPlugin(name string) (*Plugin, error) {
 	return defaultManager.GetPlugin(name)
 }
 
-func GetPluginWithVersion(name string, version uint64) (*Plugin, error) {
-	return defaultManager.GetPluginWithVersion(name, version)
+func GetPluginWithVersion(name string, versionCode uint64, versionName string) (*Plugin, error) {
+	return defaultManager.GetPluginWithVersion(name, version, versionName)
 }
 
 func GetFunc(module, function string) (f func(...interface{}) []interface{}, err error) {
